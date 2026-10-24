@@ -1,6 +1,10 @@
 package com.tws.tracker
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLiveStatus: TextView
     private lateinit var tvLiveDetails: TextView
     private lateinit var tvLogs: TextView
+    private val btReceiver = BluetoothReceiver()
 
     private val uiReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -42,11 +47,23 @@ class MainActivity : AppCompatActivity() {
         val btnSimulate: Button = findViewById(R.id.btnSimulate)
         val btnClear: Button = findViewById(R.id.btnClear)
 
+        // Register dynamic Bluetooth listener so events are never missed while app is alive
+        val btFilter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(btReceiver, btFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(btReceiver, btFilter)
+        }
+
         checkBluetoothPermissions()
 
         btnSimulate.setOnClickListener {
             val now = System.currentTimeMillis()
-            val fakeStart = now - (85 * 60 * 1000L) // 1 hr 25 mins ago
+            val fakeStart = now - (85 * 60 * 1000L)
             db.insertSession(
                 deviceName = "Mustang Nitro TWS",
                 startTime = fakeStart,
@@ -62,8 +79,13 @@ class MainActivity : AppCompatActivity() {
             db.clearAll()
             refreshUi()
         }
+    }
 
-        refreshUi()
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(btReceiver)
+        } catch (_: Exception) {}
     }
 
     override fun onResume() {
@@ -74,12 +96,117 @@ class MainActivity : AppCompatActivity() {
         } else {
             registerReceiver(uiReceiver, filter)
         }
+        syncCurrentBluetoothState()
         refreshUi()
     }
 
     override fun onPause() {
         super.onPause()
-        unregisterReceiver(uiReceiver)
+        try {
+            unregisterReceiver(uiReceiver)
+        } catch (_: Exception) {}
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        syncCurrentBluetoothState()
+        refreshUi()
+    }
+
+    private fun hasBtPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    // Checks if a TWS/Headset is ALREADY connected right now
+    private fun syncCurrentBluetoothState() {
+        if (!hasBtPermission()) return
+        try {
+            val btManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter: BluetoothAdapter? = btManager?.adapter
+            if (adapter == null || !adapter.isEnabled) return
+
+            // Check bonded devices that are currently connected via reflection or profile
+            val prefs = getSharedPreferences("tws_active_state", Context.MODE_PRIVATE)
+            val bondedDevices = adapter.bondedDevices ?: emptySet()
+
+            var connectedTws: BluetoothDevice? = null
+            for (device in bondedDevices) {
+                val isConnected = try {
+                    val method = device.javaClass.getMethod("isConnected")
+                    method.invoke(device) as? Boolean ?: false
+                } catch (_: Exception) {
+                    false
+                }
+                if (isConnected) {
+                    connectedTws = device
+                    break
+                }
+            }
+
+            if (connectedTws != null) {
+                val name = BluetoothReceiver.getSafeDeviceName(this, connectedTws)
+                val liveBat = BluetoothReceiver.getDeviceBatteryLevel(connectedTws)
+                val alreadyTracking = prefs.getBoolean("is_connected", false)
+
+                val editor = prefs.edit()
+                editor.putBoolean("is_connected", true)
+                editor.putString("device_name", name)
+                if (!alreadyTracking) {
+                    editor.putLong("start_time", System.currentTimeMillis())
+                    editor.putInt("start_battery", liveBat)
+                }
+                if (liveBat != -1) {
+                    if (prefs.getInt("start_battery", -1) == -1) {
+                        editor.putInt("start_battery", liveBat)
+                    }
+                    editor.putInt("last_battery", liveBat)
+                }
+                editor.apply()
+                refreshUi()
+            } else {
+                // Also check Headset / A2DP profile as fallback
+                adapter.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
+                    override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                        try {
+                            val devices = proxy.connectedDevices
+                            if (devices.isNotEmpty()) {
+                                val dev = devices[0]
+                                val name = BluetoothReceiver.getSafeDeviceName(this@MainActivity, dev)
+                                val liveBat = BluetoothReceiver.getDeviceBatteryLevel(dev)
+                                val already = prefs.getBoolean("is_connected", false)
+                                val editor = prefs.edit()
+                                editor.putBoolean("is_connected", true)
+                                editor.putString("device_name", name)
+                                if (!already) {
+                                    editor.putLong("start_time", System.currentTimeMillis())
+                                    editor.putInt("start_battery", liveBat)
+                                }
+                                if (liveBat != -1) {
+                                    editor.putInt("last_battery", liveBat)
+                                }
+                                editor.apply()
+                                runOnUiThread { refreshUi() }
+                            }
+                        } catch (_: Exception) {}
+                        adapter.closeProfileProxy(profile, proxy)
+                    }
+                    override fun onServiceDisconnected(profile: Int) {}
+                }, BluetoothProfile.HEADSET)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun refreshUi() {
@@ -88,7 +215,10 @@ class MainActivity : AppCompatActivity() {
         val timeFmt = SimpleDateFormat("hh:mm a", Locale.getDefault())
         val dateFmt = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
 
-        if (isConnected) {
+        if (!hasBtPermission()) {
+            tvLiveStatus.text = "⚠️ Permission Required"
+            tvLiveDetails.text = "Please allow 'Nearby Devices' permission in App Settings to track TWS."
+        } else if (isConnected) {
             val name = prefs.getString("device_name", "TWS Earbuds")
             val startBat = prefs.getInt("start_battery", -1)
             val lastBat = prefs.getInt("last_battery", -1)
