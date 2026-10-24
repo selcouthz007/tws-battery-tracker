@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Bluetooth permissions for Android 11 and below -->
+    <!-- Legacy Bluetooth Permissions (Android 11 and below) -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
 
-    <!-- Bluetooth permissions for Android 12+ (API 31+) -->
+    <!-- Modern Bluetooth Permissions (Android 12+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
 
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@drawable/ic_tws_icon"
+        android:roundIcon="@drawable/ic_tws_icon"
         android:label="@string/app_name"
+        android:supportsRtl="true"
         android:theme="@style/Theme.TwsTracker">
 
+        <!-- Launcher Main Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -24,6 +27,7 @@
             </intent-filter>
         </activity>
 
+        <!-- Bluetooth Connect/Disconnect & Battery Broadcast Receiver -->
         <receiver
             android:name=".BluetoothReceiver"
             android:exported="true">
