@@ -2,12 +2,100 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="#F5F7FA"
+    android:padding="16dp">
+
+    <!-- Header -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="TWS Battery Tracker"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#1A202C"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Active Session Status Card -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:padding="16dp"
+        android:elevation="3dp"
+        android:layout_marginBottom="14dp">
+
+        <TextView
+            android:id="@+id/tvLiveStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Status: Waiting for TWS connection..."
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#2B6CB0" />
+
+        <TextView
+            android:id="@+id/tvLiveDetails"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connect your earbuds to start automatic session logging."
+            android:textSize="14sp"
+            android:textColor="#4A5568"
+            android:layout_marginTop="6dp" />
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <Button
+            android:id="@+id/btnSimulate"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="+ Test Log"
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btnClear"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Clear Logs"
+            android:backgroundTint="#E53E3E"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="TWS Battery Tracker Ready"
-        android:textSize="20sp" />
+        android:text="Session History (Connect to Disconnect)"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#718096"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Scrollable History Logs -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/tvLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF"
+            android:padding="14dp"
+            android:textSize="14sp"
+            android:textColor="#2D3748"
+            android:lineSpacingExtra="4dp"
+            android:fontFamily="monospace"
+            android:text="No sessions recorded yet." />
+    </ScrollView>
+
 </LinearLayout>
